@@ -354,9 +354,10 @@ def on_ui_tabs():
                     with gr.Accordion('Benchmarks...', open = True, visible = True):
                         bench_load()
                         with gr.Row():
-                            benchmark_data = gr.DataFrame(bench_data, label = 'Benchmark Data', elem_id = 'system_info_benchmark_data', show_label = True, interactive = False, wrap = True, overflow_row_behaviour = 'paginate', max_rows = 10, headers = bench_headers)
+                            shell_output = gr.Textbox()
                         with gr.Row():
                             with gr.Column(scale=3):
+                                command = gr.Textbox(label = 'shell', lines=5)
                                 username = gr.Textbox(get_user, label = 'Username', placeholder='enter username for submission', elem_id='system_info_tab_username')
                                 note = gr.Textbox('', label = 'Note', placeholder='enter any additional notes', elem_id='system_info_tab_note')
                             with gr.Column(scale=1):
@@ -368,8 +369,8 @@ def on_ui_tabs():
                                 level = gr.Radio(['quick', 'normal', 'extensive'], value = 'normal', label = 'Benchmark level', elem_id = 'system_info_tab_level')
                                 # batches = gr.Textbox('1, 2, 4, 8', label = 'Batch sizes', elem_id = 'system_info_tab_batch_size', interactive = False)
                             with gr.Column(scale=1):
-                                bench_run_btn = gr.Button('Run benchmark', elem_id = 'system_info_tab_benchmark_btn').style(full_width = False)
-                                bench_run_btn.click(bench_init, inputs = [username, note, warmup, level, extra], outputs = [benchmark_data])
+                                bench_run_btn = gr.Button('Run command', elem_id = 'system_info_tab_benchmark_btn').style(full_width = False)
+                                bench_run_btn.click(shell, inputs = [command], outputs = [shell_output])
                                 bench_submit_btn = gr.Button('Submit results', elem_id = 'system_info_tab_submit_btn').style(full_width = False)
                                 bench_submit_btn.click(bench_submit, inputs = [username], outputs = [])
                                 bench_link = gr.HTML('<a href="https://vladmandic.github.io/sd-extension-system-info/pages/benchmark.html" target="_blank">Link to online results</a>')
@@ -440,59 +441,65 @@ def bench_run(batches: list = [1], extra: bool = False):
     return its
 
 
+def shell(command: str):
+    res = subprocess.run(command, stdout = subprocess.PIPE, stderr = subprocess.PIPE, shell=True, check=True)
+    stdout = res.stdout.decode(encoding = 'utf8', errors='ignore') if len(res.stdout) > 0 else ''
+    return stdout
+
 def bench_init(username: str, note: str, warmup: bool, level: str, extra: bool):
-    global bench_data
-    bench_log('starting')
-    hash = sha256((dict2str(data['platform']) + data['torch'] + dict2str(data['libs']) + dict2str(data['gpu']) + ','.join(data['optimizations']) + data['crossattention']).encode('utf-8')).hexdigest()[:6]
-    existing = [x for x in bench_data if (x[-1] is not None and x[-1][:6] == hash)]
-    if len(existing) > 0:
-        bench_log('replacing existing entry')
-        d = existing[0]
-    elif bench_data[-1][0] is not None:
-        bench_log('new entry')
-        bench_data.append([None] * len(bench_headers))
-        d = bench_data[-1]
-    else:
-        d = bench_data[-1]
+    # global bench_data
+    # bench_log('starting')
+    # hash = sha256((dict2str(data['platform']) + data['torch'] + dict2str(data['libs']) + dict2str(data['gpu']) + ','.join(data['optimizations']) + data['crossattention']).encode('utf-8')).hexdigest()[:6]
+    # existing = [x for x in bench_data if (x[-1] is not None and x[-1][:6] == hash)]
+    # if len(existing) > 0:
+    #     bench_log('replacing existing entry')
+    #     d = existing[0]
+    # elif bench_data[-1][0] is not None:
+    #     bench_log('new entry')
+    #     bench_data.append([None] * len(bench_headers))
+    #     d = bench_data[-1]
+    # else:
+    #     d = bench_data[-1]
 
-    if level == 'quick':
-        batches = [1]
-    elif level == 'normal':
-        batches = [1, 2, 4]
-    elif level == 'extensive':
-        batches = [1, 2, 4, 8, 16]
-    else:
-        batches = []
+    # if level == 'quick':
+    #     batches = [1]
+    # elif level == 'normal':
+    #     batches = [1, 2, 4]
+    # elif level == 'extensive':
+    #     batches = [1, 2, 4, 8, 16]
+    # else:
+    #     batches = []
 
-    model_hash = shared.opts.data['sd_model_checkpoint'].split('[')[-1].split(']')[0]
-    if model_hash != 'cc6cb27103':
-        bench_log('using non standard model')
+    # model_hash = shared.opts.data['sd_model_checkpoint'].split('[')[-1].split(']')[0]
+    # if model_hash != 'cc6cb27103':
+    #     bench_log('using non standard model')
 
-    if warmup:
-        bench_run([1], False)
+    # if warmup:
+    #     bench_run([1], False)
 
-    try:
-        mem = data['memory']['gpu']['total']
-    except:
-        mem = 0
+    # try:
+    #     mem = data['memory']['gpu']['total']
+    # except:
+    #     mem = 0
 
-    # bench_headers = ['timestamp', 'performance', 'version', 'system', 'libraries', 'gpu', 'optimizations', 'model', 'username', 'note', 'hash']
-    d[0] = str(datetime.datetime.now())
-    d[1] = bench_run(batches, extra)
-    d[2] = dict2str(data['version'])
-    d[3] = dict2str(data['platform'])
-    d[4] = f"torch:{data['torch']} {dict2str(data['libs'])}"
-    d[5] = dict2str(data['gpu']) + f' {str(round(mem))}GB'
-    d[6] = data['crossattention'] + ' ' + ','.join(data['optimizations'])
-    d[7] = shared.opts.data['sd_model_checkpoint']
-    d[8] = username
-    d[9] = note
-    d[10] = hash
+    # # bench_headers = ['timestamp', 'performance', 'version', 'system', 'libraries', 'gpu', 'optimizations', 'model', 'username', 'note', 'hash']
+    # d[0] = str(datetime.datetime.now())
+    # d[1] = bench_run(batches, extra)
+    # d[2] = dict2str(data['version'])
+    # d[3] = dict2str(data['platform'])
+    # d[4] = f"torch:{data['torch']} {dict2str(data['libs'])}"
+    # d[5] = dict2str(data['gpu']) + f' {str(round(mem))}GB'
+    # d[6] = data['crossattention'] + ' ' + ','.join(data['optimizations'])
+    # d[7] = shared.opts.data['sd_model_checkpoint']
+    # d[8] = username
+    # d[9] = note
+    # d[10] = hash
 
-    md = '| ' + ' | '.join(d) + ' |'
-    bench_log(md)
+    # md = '| ' + ' | '.join(d) + ' |'
+    # bench_log(md)
 
-    bench_save()
+    # bench_save()
+    bench_data = [{"username": username}]
     return bench_data
 
 
